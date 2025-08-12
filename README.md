@@ -1,7 +1,7 @@
 # radiance-cascades-experiments
 Radiance Cascades is a pretty recent technique for noiseless global illumination.
 
-This technique has been created and still improving by a group of folks (they even have a discord server!). This repo is just me researching the topic, implementing and experimenting stuff on my own...
+This technique has been created and still improving by a group of awesome folks (they even have a discord server!). This repo is just me researching the topic, implementing and experimenting stuff on my own...
 
 
 
@@ -18,8 +18,9 @@ $ python main.py
 
 # Resources & References
 Amazing resources that this project could have not been possible without:
-- https://jason.today/gi
-- https://tmpvar.com/poc/radiance-cascades/
+- [WIP Radiance Cascades Paper](https://drive.google.com/file/d/1L6v1_7HY2X-LV3Ofb6oyTIxgEaP4LOI6/view)
+- [Building Real-Time Global Illumination by Jason McGhee](https://jason.today/gi)
+- [Radiance Cascades Playground by tmpvar](https://tmpvar.com/poc/radiance-cascades/)
 
 
 
