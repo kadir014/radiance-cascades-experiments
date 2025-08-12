@@ -55,5 +55,5 @@ void main() {
         }
     }
 
-    f_color = nearest_seed;
+    f_color = vec4(nearest_seed.rgb, 1.0);
 }

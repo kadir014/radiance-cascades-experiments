@@ -40,7 +40,6 @@ class RadianceCascadesEngine:
         """
 
         # All VAOs will use the same buffers since they are all just plain screen quads
-        #self._vbo = self.create_buffer_object([-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0])
         self._vbo = self.create_buffer_object([-1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0])
         self._uvbo = self.create_buffer_object([0.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0])
         self._ibo = self.create_buffer_object([0, 1, 2, 1, 2, 3])
@@ -49,6 +48,8 @@ class RadianceCascadesEngine:
             vertex_shader=base_vertex_shader,
             fragment_shader=open("src/shaders/display.fsh").read()
         )
+
+        self._display_program["u_exposure"] = -2.0
 
         self._display_vao = self._context.vertex_array(
             self._display_program,
@@ -108,8 +109,13 @@ class RadianceCascadesEngine:
             fragment_shader=open("src/shaders/gi_pt.fsh").read()
         )
 
-        self._pt_program["s_scene"] = 0
-        self._pt_program["s_df"] = 1
+        self._pt_program["s_color_scene"] = 0
+        self._pt_program["s_emissive_scene"] = 1
+        self._pt_program["s_df"] = 2
+        self._pt_program["s_bluenoise"] = 3
+        self._pt_program["u_resolution"] = self.resolution
+        self._pt_program["u_ray_count"] = 16
+        self._pt_program["u_noise_method"] = 1
 
         self._pt_vao = self._context.vertex_array(
             self._pt_program,
@@ -120,8 +126,21 @@ class RadianceCascadesEngine:
             self._ibo
         )
 
-        self.scene_texture = self._context.texture(self.resolution, 4)
-        self.scene_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        bluenoise_surf = pygame.image.load("bluenoise_1024x1024.png")
+        self._bluenoise_texture = self._context.texture(
+            bluenoise_surf.get_size(),
+            4,
+            pygame.image.tobytes(bluenoise_surf, "RGBA", True)
+        )
+        self._bluenoise_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self._bluenoise_texture.repeat_x = True
+        self._bluenoise_texture.repeat_x = True
+
+        self.color_scene_texture = self._context.texture(self.resolution, 4)
+        self.color_scene_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+
+        self.emissive_scene_texture = self._context.texture(self.resolution, 4)
+        self.emissive_scene_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
 
         self.stage = 1
         self.jfa_passes = 1
@@ -130,6 +149,10 @@ class RadianceCascadesEngine:
         self._jfa_target1 = self._context.texture(self.resolution, 3, dtype="f4")
         self._jfa_target0.filter = (moderngl.NEAREST, moderngl.NEAREST)
         self._jfa_target1.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self._jfa_target0.repeat_x = True
+        self._jfa_target0.repeat_y = True
+        self._jfa_target1.repeat_x = True
+        self._jfa_target1.repeat_y = True
 
         self._jfa_fbo0 = self._context.framebuffer(color_attachments=(self._jfa_target0,))
         self._jfa_fbo1 = self._context.framebuffer(color_attachments=(self._jfa_target1,))
@@ -153,10 +176,15 @@ class RadianceCascadesEngine:
         dtype = "f" if isinstance(data[0], float) else "I"
         return self._context.buffer(array(dtype, data))
     
-    def update_scene_texture(self, surface: pygame.Surface) -> None:
-        """ Update scene texture. """
+    def update_color_scene(self, surface: pygame.Surface) -> None:
+        """ Update color scene texture. """
         
-        self.scene_texture.write(pygame.image.tobytes(surface, "RGBA", True))
+        self.color_scene_texture.write(pygame.image.tobytes(surface, "RGBA", True))
+
+    def update_emissive_scene(self, surface: pygame.Surface) -> None:
+        """ Update emissive scene texture. """
+        
+        self.emissive_scene_texture.write(pygame.image.tobytes(surface, "RGBA", True))
     
     def render(self) -> None:
         """ Render one frame. """
@@ -166,7 +194,7 @@ class RadianceCascadesEngine:
 
         if self.stage == 1:
             self._context.screen.use()
-            self.scene_texture.use()
+            self.color_scene_texture.use()
             self._display_vao.render()
 
         elif self.stage == 2:
@@ -182,10 +210,16 @@ class RadianceCascadesEngine:
             self._display_vao.render()
 
         elif self.stage == 4:
+            mouse = pygame.Vector2(*pygame.mouse.get_pos())
+            mouse.x /= self.resolution[0]
+            mouse.y /= self.resolution[1]
+            #self._pt_program["u_mouse"] = mouse.x, 1-mouse.y
             self._df()
             self._pt_fbo.use()
-            self.scene_texture.use(0)
-            self._df_target.use(1)
+            self.color_scene_texture.use(0)
+            self.emissive_scene_texture.use(1)
+            self._df_target.use(2)
+            self._bluenoise_texture.use(3)
             self._pt_vao.render()
             self._context.screen.use()
             self._pt_target.use()
@@ -198,7 +232,7 @@ class RadianceCascadesEngine:
         self._jfa_fbo1.clear(0.0, 0.0, 0.0)
 
         self._jfa_fbo0.use()
-        self.scene_texture.use()
+        self.color_scene_texture.use()
         self._seed_vao.render()
 
         if cap_passes:
