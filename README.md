@@ -10,10 +10,17 @@ You need Python 3.10+. After cloning the repo, install required packages:
 ```sh
 $ python -m pip install -r requirements.txt
 ```
-And then just run `main.py`
+And then just run `main.py`. You can edit `src/common.py` to adjust common settings.
 ```sh
 $ python main.py
 ```
+
+
+# Resources & References
+Amazing resources that this project could have not been possible without:
+- https://jason.today/gi
+- https://tmpvar.com/poc/radiance-cascades/
+
 
 
 # License

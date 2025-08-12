@@ -1,3 +1,10 @@
+"""
+    
+    Radiance Cascades Experiments
+    https://github.com/kadir014/radiance-cascades-experiments
+
+"""
+
 from array import array
 from math import ceil, log2, pow
 
@@ -98,7 +105,7 @@ class RadianceCascadesEngine:
 
         self._pt_program = self._context.program(
             vertex_shader=base_vertex_shader,
-            fragment_shader=open("src/shaders/pathtracer.fsh").read()
+            fragment_shader=open("src/shaders/gi_pt.fsh").read()
         )
 
         self._pt_program["s_scene"] = 0
