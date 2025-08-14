@@ -19,6 +19,7 @@ out vec4 f_color;
 uniform sampler2D s_color_scene;
 uniform sampler2D s_emissive_scene;
 uniform sampler2D s_df;
+uniform sampler2D s_inv_df;
 uniform sampler2D s_bluenoise;
 uniform vec2 u_resolution;
 uniform uint u_ray_count;
@@ -102,7 +103,7 @@ vec2 sample_semicircle(vec2 n, float t) {
     (Only diffuse scattering right now.)
 */
 Ray scatter(Ray ray, HitInfo hitinfo) {
-    vec2 new_pos = hitinfo.uv + hitinfo.normal * EPSILON;
+    vec2 new_pos = hitinfo.uv + hitinfo.normal * (EPSILON * 1.0);
 
     vec2 diffuse_ray_dir = vec2(0.0);
 
@@ -113,7 +114,9 @@ Ray scatter(Ray ray, HitInfo hitinfo) {
         diffuse_ray_dir = sample_semicircle(hitinfo.normal, prng());
     }
     else if (u_noise_method == 2) {
-        diffuse_ray_dir = sample_semicircle(hitinfo.normal, bluenoise().g);
+        //bluenoise_seed=new_pos;
+        //diffuse_ray_dir = sample_semicircle(hitinfo.normal, bluenoise().r);
+        diffuse_ray_dir = sample_semicircle(hitinfo.normal, prng());
     }
 
     vec2 new_dir = normalize(diffuse_ray_dir);
@@ -126,6 +129,7 @@ Ray scatter(Ray ray, HitInfo hitinfo) {
 */
 vec2 get_normal(vec2 uv) {
     // Step size in UV space for one pixel
+    // TOOD: Can this be optimized?
     vec2 e = 1.0 / vec2(textureSize(s_df, 0));
 
     vec2 grad = vec2(
@@ -156,10 +160,9 @@ HitInfo raymarch(Ray ray) {
     float traveled = 0.0;
 
     for (int s = 0; s < MAX_STEPS; s++) {
-        // How far away is the nearest object?
+        // Sample the nearest jump from distance field
         float dist = texture(s_df, uv).r;
-        
-        // Go the direction we're traveling
+
         traveled += dist;
         uv += ray.direction * dist;
         
@@ -196,18 +199,19 @@ vec2 raymarch_out(Ray ray) {
     float traveled = 0.0;
 
     for (int s = 0; s < MAX_STEPS; s++) {
-        float dist = EPSILON;
-
-        vec4 color_sample = texture(s_color_scene, uv);
-
-        if (color_sample.a == 0.0) {
+        // How far away is the nearest object?
+        float dist = texture(s_inv_df, uv).r;
+        
+        // Go the direction we're traveling
+        traveled += dist;
+        uv += ray.direction * dist;
+        
+        // Out of UV bounds
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
             break;
         }
-
-        traveled -= dist;
-        uv += ray.direction * dist;
-
-        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        
+        if (traveled > EPSILON && dist < EPSILON) {
             break;
         }
     }
@@ -261,21 +265,19 @@ vec3 pathtrace() {
         );
 
         // Inside solid
-        // TODO: Reverse JFA & distance field for raymarch_out
-        // if (color_sample.a > 0.0 || emissive_sample.a > 0.0) {
-        //     vec2 out_uv = raymarch_out(ray);
-        //     ray.origin = out_uv;
+        if (color_sample.a > 0.0 || emissive_sample.a > 0.0) {
+            vec2 out_uv = raymarch_out(ray);
+            ray.origin = out_uv;
 
-        //     radiance_delta *= color_sample.rgb;
-        //     radiance += radiance_delta * emissive_sample.a;
-        // }
+            radiance_delta *= color_sample.rgb;
+            radiance += radiance_delta * emissive_sample.a;
+        }
 
         for (int bounce = 0; bounce < MAX_DEPTH; bounce++) {
             HitInfo hitinfo = raymarch(ray);
 
             // TODO: sun?
             if (!hitinfo.hit) {
-                //radiance += radiance_delta * (vec3(0.65, 0.65, 0.70) * 0.6);
                 break;
             }
 

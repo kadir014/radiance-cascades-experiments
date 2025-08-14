@@ -67,6 +67,8 @@ class RadianceCascadesEngine:
             fragment_shader=open("src/shaders/uv_seed.fsh").read()
         )
 
+        self._seed_program["u_inverted"] = False
+
         self._seed_vao = self._context.vertex_array(
             self._seed_program,
             (
@@ -94,7 +96,7 @@ class RadianceCascadesEngine:
 
         self._df_program = self._context.program(
             vertex_shader=base_vertex_shader,
-            fragment_shader=open("src/shaders/df.fsh").read()
+            fragment_shader=open("src/shaders/df.fsh").read(),
         )
 
         self._df_vao = self._context.vertex_array(
@@ -114,10 +116,11 @@ class RadianceCascadesEngine:
         self._pt_program["s_color_scene"] = 0
         self._pt_program["s_emissive_scene"] = 1
         self._pt_program["s_df"] = 2
-        self._pt_program["s_bluenoise"] = 3
+        self._pt_program["s_inv_df"] = 3
+        self._pt_program["s_bluenoise"] = 4
         self._pt_program["u_resolution"] = self.resolution
         self._pt_program["u_ray_count"] = 16
-        self._pt_program["u_noise_method"] = 1
+        self._pt_program["u_noise_method"] = 2
 
         self._pt_vao = self._context.vertex_array(
             self._pt_program,
@@ -159,11 +162,12 @@ class RadianceCascadesEngine:
         self._jfa_fbo0 = self._context.framebuffer(color_attachments=(self._jfa_target0,))
         self._jfa_fbo1 = self._context.framebuffer(color_attachments=(self._jfa_target1,))
 
-        self._jfa_output = None
-
-        self._df_target = self._context.texture(self.resolution, 3, dtype="f4")
-        self._df_target.filter = (moderngl.NEAREST, moderngl.NEAREST)
-        self._df_fbo = self._context.framebuffer(color_attachments=(self._df_target,))
+        self._df_target0 = self._context.texture(self.resolution, 3, dtype="f4")
+        self._df_target1 = self._context.texture(self.resolution, 3, dtype="f4")
+        self._df_target0.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self._df_target1.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        self._df0_fbo = self._context.framebuffer(color_attachments=(self._df_target0,))
+        self._df1_fbo = self._context.framebuffer(color_attachments=(self._df_target1,))
 
         self._pt_target = self._context.texture(self.resolution, 3, dtype="f4")
         self._pt_target.filter = (moderngl.NEAREST, moderngl.NEAREST)
@@ -200,34 +204,34 @@ class RadianceCascadesEngine:
             self._display_vao.render()
 
         elif self.stage == 2:
-            self._jfa(cap_passes=True)
+            jfa_out = self._jfa(cap_passes=True)
             self._context.screen.use()
-            self._jfa_output.use()
+            jfa_out.use()
             self._display_vao.render()
 
         elif self.stage == 3:
             self._df()
             self._context.screen.use()
-            self._df_target.use()
+            self._df_target0.use()
             self._display_vao.render()
 
         elif self.stage == 4:
-            mouse = pygame.Vector2(*pygame.mouse.get_pos())
-            mouse.x /= self.resolution[0]
-            mouse.y /= self.resolution[1]
-            #self._pt_program["u_mouse"] = mouse.x, 1-mouse.y
             self._df()
             self._pt_fbo.use()
             self.color_scene_texture.use(0)
             self.emissive_scene_texture.use(1)
-            self._df_target.use(2)
-            self._bluenoise_texture.use(3)
+            self._df_target0.use(2)
+            self._df_target1.use(3)
+            self._bluenoise_texture.use(4)
             self._pt_vao.render()
             self._context.screen.use()
             self._pt_target.use()
             self._display_vao.render()
 
-    def _jfa(self, cap_passes: bool = False) -> None:
+    def _jfa(self,
+             cap_passes: bool = False,
+             inverted: bool = False
+             ) -> moderngl.Texture:
         """ Jump Fill Algorithm. """
 
         self._jfa_fbo0.clear(0.0, 0.0, 0.0)
@@ -235,6 +239,7 @@ class RadianceCascadesEngine:
 
         self._jfa_fbo0.use()
         self.color_scene_texture.use()
+        self._seed_program["u_inverted"] = inverted
         self._seed_vao.render()
 
         if cap_passes:
@@ -258,13 +263,22 @@ class RadianceCascadesEngine:
             self._jfa_program["u_offset"] = off
             self._jfa_vao.render()
 
-            self._jfa_output = targets[b]
+            output = targets[b]
+
+        return output
 
     def _df(self) -> None:
-        """ Generate from JFA texture. """
+        """ Generate distance field from JFA texture. """
 
-        self._jfa()
+        self._df0_fbo.clear()
+        self._df1_fbo.clear()
 
-        self._df_fbo.use()
-        self._jfa_output.use()
+        jfa = self._jfa()
+        self._df0_fbo.use()
+        jfa.use(0)
+        self._df_vao.render()
+
+        jfa = self._jfa(inverted=True)
+        self._df1_fbo.use()
+        jfa.use(0)
         self._df_vao.render()

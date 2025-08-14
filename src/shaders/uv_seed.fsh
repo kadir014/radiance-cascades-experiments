@@ -13,6 +13,7 @@
 
 in vec2 v_uv;
 out vec4 f_color;
+uniform bool u_inverted;
 
 uniform sampler2D s_texture;
 
@@ -20,7 +21,7 @@ uniform sampler2D s_texture;
 void main() {
     vec2 uv = v_uv;
     float alpha = texture(s_texture, uv).a;
-    if (alpha == 0.0) {
+    if ((alpha == 0.0) != u_inverted) {
         f_color = vec4(0.0, 0.0, 0.0, 1.0);
     }
     else {

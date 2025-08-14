@@ -6,6 +6,7 @@
 """
 
 from time import perf_counter
+from random import randint
 
 import pygame
 import imgui
@@ -16,7 +17,7 @@ from src.engine import RadianceCascadesEngine
 
 
 if __name__ == "__main__":
-    window = pygame.display.set_mode(
+    pygame.display.set_mode(
         (WINDOW_WIDTH, WINDOW_HEIGHT),
         pygame.OPENGL | pygame.DOUBLEBUF
     )
@@ -32,8 +33,17 @@ if __name__ == "__main__":
     last_mouse = pygame.Vector2()
     brush_radius = 10.0
     brush_radiush = brush_radius * 0.5
-    brush_color = (255, 255, 255)
     hue = 0
+
+    for i in range(100):
+        diffuse_color = (randint(0, 255), randint(0, 255), randint(0, 255))
+        pos = (randint(0, WINDOW_WIDTH), randint(0, WINDOW_HEIGHT))
+        radius = randint(1, 50)
+
+        pygame.draw.circle(color_canvas, diffuse_color, pos, radius)
+
+        if randint(0, 1) == 0:
+            pygame.draw.circle(emissive_canvas, (0, 0, 0, 255), pos, radius)
 
     is_running = True
     frame = 0
@@ -48,6 +58,10 @@ if __name__ == "__main__":
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     is_running = False
+
+                elif event.key == pygame.K_c:
+                    color_canvas.fill((0, 0, 0, 0))
+                    emissive_canvas.fill((0, 0, 0, 0))
         
         gui_helper.process_events(events)
 
@@ -131,6 +145,7 @@ if __name__ == "__main__":
             imgui.text("- [Left MB] for diffuse material brush.")
             imgui.text("- [Right MB] for emissive material brush.")
             imgui.text("- [Middle MB] for rainbow emissive material brush.")
+            imgui.text("- [C] to clear canvas.")
             imgui.pop_text_wrap_pos()
             imgui.tree_pop()
 
