@@ -15,9 +15,6 @@ from src.gui import ImguiPygameModernGLAbomination
 from src.engine import RadianceCascadesEngine
 
 
-img = pygame.transform.scale_by(pygame.image.load("pygame_ce_logo.webp"), 0.3)
-
-
 if __name__ == "__main__":
     window = pygame.display.set_mode(
         (WINDOW_WIDTH, WINDOW_HEIGHT),
@@ -32,7 +29,6 @@ if __name__ == "__main__":
 
     color_canvas = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA).convert_alpha()
     emissive_canvas = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA).convert_alpha()
-    emissive_canvas.fill((0, 0, 0, 0))
     last_mouse = pygame.Vector2()
     brush_radius = 10.0
     brush_radiush = brush_radius * 0.5
@@ -102,12 +98,12 @@ if __name__ == "__main__":
 
         imgui.new_frame()
 
-        imgui.begin("Settings", True, flags=imgui.WINDOW_NO_MOVE)
+        imgui.begin("Settings", True, flags=imgui.WINDOW_NO_MOVE | imgui.WINDOW_ALWAYS_AUTO_RESIZE)
         imgui.set_window_position(0, 0)
-        imgui.set_window_size(240, 150)
+        imgui.set_window_size(245, 250)
         
         imgui.push_item_width(imgui.get_window_width() * 0.5)
-        _, brush_radius = imgui.slider_float("Brush radius", brush_radius, 1.0, 30.0, format="%.1f")
+        _, brush_radius = imgui.slider_float("Brush radius", brush_radius, 1.0, 100.0, format="%.1f")
         brush_radiush = brush_radius * 0.5
 
         stage_name = ("Painting", "JFA", "Distance Field", "Pathtracing GI")[engine.stage-1]
@@ -120,7 +116,23 @@ if __name__ == "__main__":
         noise_name = ("None", "Mulberry32", "Bluenoise")[engine._pt_program["u_noise_method"].value]
         _, engine._pt_program["u_noise_method"] = imgui.slider_int("Noise method", engine._pt_program["u_noise_method"].value, 0, 2, format=noise_name)
 
-        _, engine._display_program["u_exposure"] = imgui.slider_float("Exposure", engine._display_program["u_exposure"].value, -5.0, 5.0, format="%.1f")
+        if imgui.tree_node("Post-processing", imgui.TREE_NODE_DEFAULT_OPEN):
+            _, engine._display_program["u_enable_post"] = imgui.checkbox("Enable post-processing", engine._display_program["u_enable_post"].value)
+            _, engine._display_program["u_exposure"] = imgui.slider_float("Exposure", engine._display_program["u_exposure"].value, -5.0, 5.0, format="%.1f")
+
+            tm_name = ("None", "ACES Filmic")[engine._display_program["u_tonemapper"].value]
+            _, engine._display_program["u_tonemapper"] = imgui.slider_int(f"Tonemapper", engine._display_program["u_tonemapper"].value, 0, 1, format=tm_name)
+            
+            imgui.tree_pop()
+
+        if imgui.tree_node("Controls"):
+            imgui.push_text_wrap_pos(0.0)
+            imgui.text("- [ESC] to quit the application.")
+            imgui.text("- [Left MB] for diffuse material brush.")
+            imgui.text("- [Right MB] for emissive material brush.")
+            imgui.text("- [Middle MB] for rainbow emissive material brush.")
+            imgui.pop_text_wrap_pos()
+            imgui.tree_pop()
 
         imgui.end()
         

@@ -17,9 +17,12 @@ in vec2 v_uv;
 out vec4 f_color;
 
 uniform sampler2D s_texture;
+uniform bool u_enable_post;
 uniform float u_exposure;
+uniform uint u_tonemapper;
 
 #define GAMMA 0.45454545454545454545454545454545 // 1.0 / 2.2
+#define SQRT2 1.4142135623730950488016887242097 // sqrt(2.0)
 
 
 /*
@@ -39,11 +42,15 @@ vec3 aces_filmic(vec3 x) {
 void main() {
     vec3 hdr_color = texture(s_texture, v_uv).rgb;
 
-    hdr_color *= pow(sqrt(2.0), u_exposure);
+    if (u_enable_post) {
+        hdr_color *= pow(SQRT2, u_exposure);
 
-    hdr_color = aces_filmic(hdr_color);
+        if (u_tonemapper == 1) {
+            hdr_color = aces_filmic(hdr_color);
+        }
 
-    hdr_color = pow(hdr_color, vec3(GAMMA));
+        hdr_color = pow(hdr_color, vec3(GAMMA));
+    }
 
     f_color = vec4(hdr_color, 1.0);
 }

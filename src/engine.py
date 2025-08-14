@@ -49,6 +49,8 @@ class RadianceCascadesEngine:
             fragment_shader=open("src/shaders/display.fsh").read()
         )
 
+        self._display_program["u_enable_post"] = False
+        self._display_program["u_tonemapper"] = 1
         self._display_program["u_exposure"] = -2.0
 
         self._display_vao = self._context.vertex_array(

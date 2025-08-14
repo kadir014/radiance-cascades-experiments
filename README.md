@@ -21,6 +21,7 @@ Amazing resources that this project could have not been possible without:
 - [WIP Radiance Cascades Paper](https://drive.google.com/file/d/1L6v1_7HY2X-LV3Ofb6oyTIxgEaP4LOI6/view)
 - [Building Real-Time Global Illumination by Jason McGhee](https://jason.today/gi)
 - [Radiance Cascades Playground by tmpvar](https://tmpvar.com/poc/radiance-cascades/)
+- [Free bluenoise textures repo](https://github.com/Calinou/free-blue-noise-textures)
 
 
 

@@ -28,7 +28,7 @@ uniform vec2 u_mouse;
 /*  \/  SETTINGS  \/  */
 
 #define RAY_COUNT u_ray_count
-#define MAX_DEPTH 2
+#define MAX_DEPTH 1
 #define MAX_STEPS 64
 
 /*  /\  SETTINGS /\  */
@@ -71,14 +71,13 @@ uint wang_hash(uint a) {
     return a;
 }
 
-uint prng_state;
-
 /*
     Mulberry32 PRNG
     Returns a float in range 0 and 1.
 
     From https://gist.github.com/tommyettinger/46a874533244883189143505d203312c
 */
+uint prng_state;
 float prng() {
     prng_state += 0x6D2B79F5u;
     uint z = (prng_state ^ (prng_state >> 15)) * (1u | prng_state);
@@ -87,20 +86,9 @@ float prng() {
 }
 
 vec2 bluenoise_seed;
-
 vec4 bluenoise() {
     vec4 bluenoise_sample = texture(s_bluenoise, (bluenoise_seed * u_resolution) / vec2(BLUENOISE_SIZE, BLUENOISE_SIZE));
     return fract(bluenoise_sample);
-}
-
-vec2 random_in_unit_circle() {
-    float a = bluenoise().g;
-    float b = bluenoise().b;
-    float angle = a * TAU;
-    float radius = sqrt(b); // sqrt to correct density
-    float x = radius * cos(angle);
-    float y = radius * sin(angle);
-    return vec2(x, y);
 }
 
 vec2 sample_semicircle(vec2 n, float t) {
@@ -110,13 +98,11 @@ vec2 sample_semicircle(vec2 n, float t) {
 }
 
 /*
-    Bounces and scattering doesn't work right now...
+    Scatter the ray from the surface depending on the material.
+    (Only diffuse scattering right now.)
 */
 Ray scatter(Ray ray, HitInfo hitinfo) {
     vec2 new_pos = hitinfo.uv + hitinfo.normal * EPSILON;
-
-    //bluenoise_seed = new_pos;
-    //vec2 diffuse_ray_dir = normalize(hitinfo.normal + random_in_unit_circle());
 
     vec2 diffuse_ray_dir = vec2(0.0);
 
@@ -130,19 +116,7 @@ Ray scatter(Ray ray, HitInfo hitinfo) {
         diffuse_ray_dir = sample_semicircle(hitinfo.normal, bluenoise().g);
     }
 
-
-
-    //vec2 diffuse_ray_dir = reflect(ray.direction, hitinfo.normal);
-
     vec2 new_dir = normalize(diffuse_ray_dir);
-
-    // specular = (prng(prng_state) < hitinfo.material.specular_percentage) ? 1.0 : 0.0;
-
-    // vec3 diffuse_ray_dir = normalize(hitinfo.normal + random_in_unit_sphere(prng_state));
-    // vec3 specular_ray_dir = reflect(ray.dir, hitinfo.normal);
-    // specular_ray_dir = normalize(mix(specular_ray_dir, diffuse_ray_dir, hitinfo.material.roughness * hitinfo.material.roughness));
-
-    // vec3 new_dir = mix(diffuse_ray_dir, specular_ray_dir, specular);
 
     return Ray(new_pos, new_dir);
 }
@@ -163,6 +137,7 @@ vec2 get_normal(vec2 uv) {
 
     grad = normalize(grad);
 
+    // Fix degenerate normal
     if (abs(grad.x) <= EPSILON && abs(grad.y) <= EPSILON) {
         grad = vec2(0.0, 1.0);
     }
@@ -193,7 +168,7 @@ HitInfo raymarch(Ray ray) {
             break;
         }
         
-        if (EPSILON < traveled && dist < EPSILON) {
+        if (traveled > EPSILON && dist < EPSILON) {
             vec4 color_sample = texture(s_color_scene, uv);
             vec4 emissive_sample = texture(s_emissive_scene, uv);
 
@@ -213,6 +188,34 @@ HitInfo raymarch(Ray ray) {
 }
 
 /*
+    This is used to get out of solids. However, hits the max steps in almost all cases.
+    TODO: Need a better strategy to get rays out of solids. This is EXPENSIVE!
+*/
+vec2 raymarch_out(Ray ray) {
+    vec2 uv = ray.origin;
+    float traveled = 0.0;
+
+    for (int s = 0; s < MAX_STEPS; s++) {
+        float dist = EPSILON;
+
+        vec4 color_sample = texture(s_color_scene, uv);
+
+        if (color_sample.a == 0.0) {
+            break;
+        }
+
+        traveled -= dist;
+        uv += ray.direction * dist;
+
+        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+            break;
+        }
+    }
+
+    return uv;
+}
+
+/*
     Pathtrace!
 */
 vec3 pathtrace() {
@@ -221,9 +224,9 @@ vec3 pathtrace() {
     vec4 color_sample = texture(s_color_scene, v_uv);
     vec4 emissive_sample = texture(s_emissive_scene, v_uv);
 
-    // TODO: transparency, refractions
+    // Exit early if the current pixel is emissive
     if (emissive_sample.a > 0.0) {
-       return color_sample.rgb;
+        return color_sample.rgb;
     }
 
     float inv_ray_n = 1.0 / float(RAY_COUNT);
@@ -246,9 +249,6 @@ vec3 pathtrace() {
             noise = prng();
         }
         else if (u_noise_method == 2) {
-            // vec4 bluenoise_sample = texture(s_bluenoise, screen_uv / vec2(BLUENOISE_SIZE, BLUENOISE_SIZE));
-            // float bluenoise = fract(bluenoise_sample.r);
-            // noise = bluenoise;
             bluenoise_seed = v_uv;
             noise = bluenoise().r;
         }
@@ -261,14 +261,14 @@ vec3 pathtrace() {
         );
 
         // Inside solid
-        if (color_sample.a > 0.0) {
-            HitInfo hit = raymarch(ray);
-            ray.origin = hit.uv + (hit.normal * EPSILON);
-            //float dist = texture(s_df, ray.origin).r;
-            //ray.origin += ray.direction * (dist + 1.0);
-            radiance_delta *= color_sample.rgb;
-            radiance += radiance_delta * emissive_sample.a;
-        }
+        // TODO: Reverse JFA & distance field for raymarch_out
+        // if (color_sample.a > 0.0 || emissive_sample.a > 0.0) {
+        //     vec2 out_uv = raymarch_out(ray);
+        //     ray.origin = out_uv;
+
+        //     radiance_delta *= color_sample.rgb;
+        //     radiance += radiance_delta * emissive_sample.a;
+        // }
 
         for (int bounce = 0; bounce < MAX_DEPTH; bounce++) {
             HitInfo hitinfo = raymarch(ray);
@@ -291,27 +291,8 @@ vec3 pathtrace() {
     return final_radiance * inv_ray_n;
 }
 
-float udSegment( in vec2 p, in vec2 a, in vec2 b )
-{
-    vec2 ba = b-a;
-    vec2 pa = p-a;
-    float h =clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
-    return length(pa-h*ba);
-}
 
 void main() {
     vec3 color = pathtrace();
     f_color = vec4(color, 1.0);
-
-    // vec2 center = vec2(0.5, 0.5);
-    // vec2 dir = normalize(u_mouse - center);
-    // HitInfo hit = raymarch(Ray(center, dir));
-    // if (hit.hit) {
-    //     if (udSegment(v_uv, center, hit.uv) < 0.0008) {
-    //         f_color = vec4(1.0, 0.0, 0.0, 1.0);
-    //     }
-    //     if (udSegment(v_uv, hit.uv, hit.uv + hit.normal) < 0.0008) {
-    //         f_color = vec4(0.0, 1.0, 0.0, 1.0);
-    //     }
-    // }
 }
