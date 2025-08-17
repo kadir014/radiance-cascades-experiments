@@ -6,7 +6,7 @@
 /*
     Display shader
     --------------
-    HRD to LDR display shader.
+    HRD to LDR post-processing shader.
 
     Applies exposure > tonemaps > corrects gamma
 */

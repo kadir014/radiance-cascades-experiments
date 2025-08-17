@@ -38,7 +38,7 @@ if __name__ == "__main__":
     for i in range(100):
         diffuse_color = (randint(0, 255), randint(0, 255), randint(0, 255))
         pos = (randint(0, WINDOW_WIDTH), randint(0, WINDOW_HEIGHT))
-        radius = randint(1, 50)
+        radius = randint(5, 35)
 
         pygame.draw.circle(color_canvas, diffuse_color, pos, radius)
 
@@ -156,8 +156,8 @@ if __name__ == "__main__":
         gui_helper.render(imgui.get_draw_data())
 
         pygame.display.flip()
-
         elapsed = perf_counter() - _start
+        
         pygame.display.set_caption(f"Radiance Cascades Experiments  -  {round(clock.get_fps())}fps  render time: {round(elapsed*1000, 2)}ms")
 
         frame += 1

@@ -29,7 +29,7 @@ uniform vec2 u_mouse;
 /*  \/  SETTINGS  \/  */
 
 #define RAY_COUNT u_ray_count
-#define MAX_DEPTH 1
+#define MAX_DEPTH 2
 #define MAX_STEPS 64
 
 /*  /\  SETTINGS /\  */
@@ -191,18 +191,16 @@ HitInfo raymarch(Ray ray) {
 }
 
 /*
-    This is used to get out of solids. However, hits the max steps in almost all cases.
-    TODO: Need a better strategy to get rays out of solids. This is EXPENSIVE!
+    Raymarch, except use the inverted distance field.
+    This is used to getting the ray origin out of solids.
 */
 vec2 raymarch_out(Ray ray) {
     vec2 uv = ray.origin;
     float traveled = 0.0;
 
     for (int s = 0; s < MAX_STEPS; s++) {
-        // How far away is the nearest object?
         float dist = texture(s_inv_df, uv).r;
-        
-        // Go the direction we're traveling
+
         traveled += dist;
         uv += ray.direction * dist;
         
